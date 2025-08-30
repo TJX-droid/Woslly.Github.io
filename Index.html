@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Liquid Glass</title>
+    <style>
+        :root{
+            --bg-dark:#0b1020;
+            --glass-bg: rgba(255,255,255,0.06);
+            --glass-border: rgba(255,255,255,0.12);
+        }
+
+        html,body{
+            height:100%;
+            margin:0;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: var(--bg-dark);
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+            cursor: none; /* hide native cursor */
+            overflow:hidden;
+        }
+
+        /* background canvas fills viewport */
+        canvas#bg {
+            position:fixed;
+            inset:0;
+            z-index:0;
+            display:block;
+            pointer-events:none;
+        }
+
+        /* center container */
+        .wrap{
+            position:relative;
+            z-index:2;
+            display:flex;
+            align-items:flex-start;
+            justify-content:center;
+            min-height:100vh;
+            padding:48px 24px;
+            box-sizing:border-box;
+        }
+
+        /* glass header */
+        .glass {
+            width: min(1100px, 92%);
+            max-width:1100px;
+            height:240px;
+            border-radius:28px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+            border: 1px solid var(--glass-border);
+            box-shadow:
+                0 10px 30px rgba(2,6,23,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.02);
+            position:relative;
+            overflow:hidden;
+            backdrop-filter: blur(10px) saturate(140%);
+            -webkit-backdrop-filter: blur(10px) saturate(140%);
+            display:flex;
+            align-items:center;
+            padding:28px 36px;
+        }
+
+        /* decorative subtle noise/shine */
+        .glass::after{
+            content:"";
+            position:absolute;
+            inset:0;
+            background:
+                radial-gradient(1200px 300px at 10% 10%, rgba(255,255,255,0.02), transparent 10%),
+                radial-gradient(800px 200px at 90% 80%, rgba(255,255,255,0.015), transparent 10%);
+            pointer-events:none;
+            mix-blend-mode:overlay;
+        }
+
+        /* text */
+        .content{
+            position:relative;
+            z-index:3;
+            color: white;
+            text-shadow: 0 6px 30px rgba(3,6,18,0.6);
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+        }
+
+        h1{
+            margin:0;
+            font-weight:700;
+            font-size:38px;
+            letter-spacing:-0.02em;
+            color: #ffffff;
+        }
+        p.lead{
+            margin:0;
+            opacity:0.85;
+            font-size:16px;
+            max-width:720px;
+        }
+
+        /* SVG overlay for blob / liquid effect */
+        svg#liquid{
+            position:absolute;
+            inset:0;
+            width:100%;
+            height:100%;
+            z-index:1;
+            pointer-events:none;
+            mix-blend-mode:screen;
+        }
+
+        /* custom "Apple-like" cursor */
+        .cursor {
+            position:fixed;
+            z-index:9999;
+            width:48px;
+            height:72px;
+            border-radius:36px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(245,245,245,0.86));
+            box-shadow:
+                0 8px 24px rgba(6,10,20,0.45),
+                inset 0 1px 0 rgba(255,255,255,0.9);
+            transform: translate(-50%,-50%);
+            pointer-events:none;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            transition: transform 140ms cubic-bezier(.2,.9,.3,1);
+            mix-blend-mode:normal;
+            border:1px solid rgba(0,0,0,0.06);
+        }
+
+        /* little glossy stripe like Magic Mouse */
+        .cursor::before{
+            content:"";
+            width:70%;
+            height:22%;
+            border-radius:12px;
+            position:absolute;
+            top:18%;
+            left:50%;
+            transform:translateX(-50%);
+            background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.6));
+            box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
+            opacity:0.9;
+        }
+
+        /* small subtle indicator dot */
+        .cursor .dot{
+            width:8px;
+            height:8px;
+            background: rgba(0,0,0,0.12);
+            border-radius:50%;
+            transform: translateY(6px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            opacity:0.9;
+        }
+
+        /* when clicking, the cursor depresses */
+        .cursor.active{
+            transform: translate(-50%,-50%) scale(0.92);
+            box-shadow: 0 6px 18px rgba(6,10,20,0.45), inset 0 -4px 18px rgba(0,0,0,0.06);
+        }
+
+        /* responsive tweaks */
+        @media (max-width:600px){
+            h1{font-size:28px;}
+            .glass{height:200px; padding:20px;}
+            .cursor{width:40px;height:56px;}
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg"></canvas>
+
+    <div class="wrap">
+        <div class="glass" id="glass">
+            <svg id="liquid" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="g1" x1="0" x2="1">
+                        <stop offset="0" stop-color="#8be9fd" stop-opacity="0.32"/>
+                        <stop offset="0.5" stop-color="#9b8cff" stop-opacity="0.24"/>
+                        <stop offset="1" stop-color="#ffb199" stop-opacity="0.18"/>
+                    </linearGradient>
+                    <filter id="goo" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="18" result="blur"/>
+                        <feColorMatrix in="blur" mode="matrix" values="
+                             1 0 0 0 0
+                             0 1 0 0 0
+                             0 0 1 0 0
+                             0 0 0 20 -10" result="goo"/>
+                        <feBlend in="SourceGraphic" in2="goo"/>
+                    </filter>
+                </defs>
+
+                <!-- Layered smooth blob shapes -->
+                <g filter="url(#goo)">
+                    <path id="blob1" fill="url(#g1)" opacity="0.95"></path>
+                    <path id="blob2" fill="#ffffff" opacity="0.06"></path>
+                </g>
+            </svg>
+
+            <div class="content">
+                <h1>Liquid Glass</h1>
+                <p class="lead">Welcome To my site </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="cursor" id="cursor">
+        <div class="dot"></div>
+    </div>
+
+    <script>
+        // Minimal utilities
+        const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+        const lerp = (a,b,t)=>a+(b-a)*t;
+
+        /* ---------- Background canvas: colorful trailing blobs ---------- */
+        (function(){
+            const canvas = document.getElementById('bg');
+            const ctx = canvas.getContext('2d', {alpha:true});
+            let w = canvas.width = innerWidth;
+            let h = canvas.height = innerHeight;
+            let mouse = {x:w/2,y:h/2};
+            const particles = [];
+
+            window.addEventListener('resize', ()=>{
+                w = canvas.width = innerWidth;
+                h = canvas.height = innerHeight;
+            });
+
+            window.addEventListener('mousemove', (e)=>{
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                // spawn several colorful blobs on move
+                for(let i=0;i<3;i++){
+                    const hue = 180 + Math.random()*160;
+                    particles.push({
+                        x: mouse.x + (Math.random()-0.5)*40,
+                        y: mouse.y + (Math.random()-0.5)*40,
+                        life: 1,
+                        size: 12 + Math.random()*40,
+                        hue,
+                        vx: (Math.random()-0.5)*1.2,
+                        vy: (Math.random()-0.5)*1.2
+                    });
+                }
+            });
+
+            function draw(){
+                ctx.clearRect(0,0,w,h);
+                // semi transparent background to create soft trails
+                ctx.fillStyle = 'rgba(8,10,18,0.12)';
+                ctx.fillRect(0,0,w,h);
+
+                for(let i=particles.length-1;i>=0;i--){
+                    const p = particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vx *= 0.98;
+                    p.vy *= 0.98;
+                    p.life -= 0.012;
+                    const alpha = clamp(p.life,0,1);
+                    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size*3);
+                    g.addColorStop(0, `hsla(${p.hue}, 90%, 60%, ${alpha*0.85})`);
+                    g.addColorStop(0.3, `hsla(${p.hue+30}, 90%, 55%, ${alpha*0.42})`);
+                    g.addColorStop(1, `hsla(${p.hue+60}, 80%, 45%, 0)`);
+                    ctx.globalCompositeOperation = 'screen';
+                    ctx.fillStyle = g;
+                    ctx.beginPath();
+                    ctx.arc(p.x,p.y,p.size*1.8,0,Math.PI*2);
+                    ctx.fill();
+                    if(p.life <= 0) particles.splice(i,1);
+                }
+                ctx.globalCompositeOperation = 'source-over';
+                requestAnimationFrame(draw);
+            }
+            draw();
+
+            // gentle ambient blobs that float
+            setInterval(()=>{
+                particles.push({
+                    x: Math.random()*w,
+                    y: Math.random()*h,
+                    life: 0.7 + Math.random()*0.8,
+                    size: 80 + Math.random()*160,
+                    hue: 180 + Math.random()*180,
+                    vx: (Math.random()-0.5)*0.2,
+                    vy: (Math.random()-0.5)*0.2
+                });
+            }, 900);
+        })();
+
+        /* ---------- Custom cursor (Apple-like) ---------- */
+        (function(){
+            const c = document.getElementById('cursor');
+            let cx = innerWidth/2, cy = innerHeight/2;
+            let tx = cx, ty = cy;
+            const ease = 0.18;
+            window.addEventListener('mousemove', e => { tx = e.clientX; ty = e.clientY; });
+            window.addEventListener('mousedown', ()=> c.classList.add('active'));
+            window.addEventListener('mouseup', ()=> c.classList.remove('active'));
+            function animate(){
+                cx = lerp(cx, tx, ease);
+                cy = lerp(cy, ty, ease);
+                c.style.left = cx + 'px';
+                c.style.top = cy + 'px';
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+
+        /* ---------- Liquid blob in header ---------- */
+        (function(){
+            const svg = document.getElementById('liquid');
+            const path1 = document.getElementById('blob1');
+            const path2 = document.getElementById('blob2');
+            const rect = document.getElementById('glass').getBoundingClientRect();
+
+            // sample density and physics
+            const POINTS = 14;
+            const width = 1000, height = 1000;
+            const cx = width/2, cy = height/2;
+            const baseRadius = 320;
+            const points = [];
+            for(let i=0;i<POINTS;i++){
+                const theta = (i/POINTS) * Math.PI*2;
+                points.push({
+                    x: cx + Math.cos(theta)*baseRadius,
+                    y: cy + Math.sin(theta)*baseRadius,
+                    ox: cx + Math.cos(theta)*baseRadius,
+                    oy: cy + Math.sin(theta)*baseRadius,
+                    vx:0, vy:0
+                });
+            }
+
+            // map mouse into svg coords
+            let mouse = {x: cx, y: cy, active:false};
+            window.addEventListener('mousemove', (e)=>{
+                const gRect = document.getElementById('glass').getBoundingClientRect();
+                const localX = ((e.clientX - gRect.left) / gRect.width) * width;
+                const localY = ((e.clientY - gRect.top) / gRect.height) * height;
+                mouse.x = localX;
+                mouse.y = localY;
+                mouse.active = true;
+            });
+            window.addEventListener('mouseleave', ()=> mouse.active=false);
+
+            // physics update
+            function updatePoints(){
+                const influence = 120; // how far mouse pushes
+                const push = 28; // push magnitude
+
+                for(let i=0;i<POINTS;i++){
+                    const p = points[i];
+                    // spring back force
+                    let dx = p.ox - p.x;
+                    let dy = p.oy - p.y;
+                    p.vx += dx * 0.015;
+                    p.vy += dy * 0.015;
+
+                    // mouse influence: push nearby points outward from mouse
+                    if(mouse.active){
+                        const mdx = p.x - mouse.x;
+                        const mdy = p.y - mouse.y;
+                        const d = Math.sqrt(mdx*mdx + mdy*mdy);
+                        if(d < influence){
+                            const force = (1 - (d / influence)) * push;
+                            p.vx += (mdx / (d+0.01)) * force;
+                            p.vy += (mdy / (d+0.01)) * force;
+                        }
+                    }
+
+                    // neighbor smoothing to create liquid feel
+                    const left = points[(i-1+POINTS)%POINTS];
+                    const right = points[(i+1)%POINTS];
+                    p.vx += (left.x + right.x - 2*p.x) * 0.03;
+                    p.vy += (left.y + right.y - 2*p.y) * 0.03;
+
+                    // damp
+                    p.vx *= 0.86;
+                    p.vy *= 0.86;
+
+                    p.x += p.vx;
+                    p.y += p.vy;
+                }
+            }
+
+            // build path using quadratic curves via midpoints
+            function buildPath(points){
+                let d = '';
+                for(let i=0;i<POINTS;i++){
+                    const p = points[i];
+                    const next = points[(i+1)%POINTS];
+                    const mx = (p.x + next.x)/2;
+                    const my = (p.y + next.y)/2;
+                    if(i===0){
+                        d += `M ${mx} ${my} `;
+                    }
+                    d += `Q ${p.x} ${p.y} ${mx} ${my} `;
+                }
+                d += 'Z';
+                return d;
+            }
+
+            function frame(){
+                updatePoints();
+                const d = buildPath(points);
+
+                // primary colored blob (slightly larger for vividness)
+                path1.setAttribute('d', d);
+                path1.setAttribute('transform', 'translate(0, -10)');
+
+                // faint white overlay for subtle gloss
+                path2.setAttribute('d', d);
+                path2.setAttribute('transform', 'translate(0, 6)');
+
+                requestAnimationFrame(frame);
+            }
+            frame();
+
+            // keep svg viewBox sizing reactive when glass resizes
+            new ResizeObserver(()=>{
+                // no action required: we draw in normalized 1000x1000 coords
+            }).observe(document.getElementById('glass'));
+        })();
+    </script>
+</body>
+</html>
